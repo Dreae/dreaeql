@@ -3,7 +3,7 @@ defmodule DreaeQL do
   Documentation for `Dreaeql`.
   """
 
-  alias DreaeQL.{Terms, Expressions}
+  alias DreaeQL.{Terms, Operators}
 
   def parse(string), do: parse_tokens(tokenize(string))
 
@@ -11,7 +11,6 @@ defmodule DreaeQL do
     tokenize(data, [])
   end
 
-  def tokenize("=" <> data, tokens), do: tokenize(data, [:equals | tokens])
   def tokenize(" " <> data, tokens), do: tokenize(data, tokens)
   def tokenize(<<t::unsigned-8>> <> data, tokens) when t >= ?0 and t <= ?9, do: consume_number(data, <<t::unsigned-8>>, tokens)
   def tokenize(<<t::unsigned-8>> <> data, tokens) when (t >= ?A and t <= ?Z) or (t >= ?a and t <= ?z), do: consume_identifier(data, <<t::unsigned-8>>, tokens)
@@ -19,14 +18,19 @@ defmodule DreaeQL do
   def tokenize("-" <> data, tokens), do: consume_number(data, "-", tokens)
   def tokenize("(" <> data, tokens), do: tokenize(data, [:open_paren | tokens])
   def tokenize(")" <> data, tokens), do: tokenize(data, [:close_paren | tokens])
-  def tokenize("!" <> data, tokens), do: tokenize(data, [:bang | tokens])
+  def tokenize("=" <> data, tokens), do: tokenize(data, [:equals | tokens])
+  def tokenize("!=" <> data, tokens), do: tokenize(data, [:not_equals | tokens])
+  def tokenize("<" <> data, tokens), do: tokenize(data, [:lt | tokens])
+  def tokenize("<=" <> data, tokens), do: tokenize(data, [:le | tokens])
+  def tokenize(">" <> data, tokens), do: tokenize(data, [:gt | tokens])
+  def tokenize(">=" <> data, tokens), do: tokenize(data, [:ge | tokens])
   def tokenize("", tokens), do: Enum.reverse(tokens)
 
   def consume_number(<<t::unsigned-8>> <> data, token, tokens) when t >= ?0 and t <= ?9, do: consume_number(data, token <> <<t::unsigned-8>>, tokens)
   def consume_number("_" <> data, token, tokens), do: consume_number(data, token, tokens)
   def consume_number("." <> data, token, tokens), do: consume_float(data, token <> ".", tokens)
   def consume_number(" " <> data, token, tokens), do: tokenize(data, [finalize_number(token) | tokens])
-  def consume_number(")" <> data, token, tokens), do: tokenize(")" <> data, [finalize_number(token) | tokens])
+  def consume_number(")" <> _data = buffer, token, tokens), do: tokenize(buffer, [finalize_number(token) | tokens])
   def consume_number("", token, tokens), do: tokenize("", [finalize_number(token) | tokens])
   def finalize_number(token) do
     {num, ""} = Integer.parse(token)
@@ -36,7 +40,7 @@ defmodule DreaeQL do
   def consume_float(<<t::unsigned-8>> <> data, token, tokens) when t >= ?0 and t <= ?9, do: consume_float(data, token <> <<t::unsigned-8>>, tokens)
   def consume_float("_" <> data, token, tokens), do: consume_float(data, token, tokens)
   def consume_float(" " <> data, token, tokens), do: tokenize(data, [finalize_float(token) | tokens])
-  def consume_float(")" <> data, token, tokens), do: tokenize(")" <> data, [finalize_float(token) | tokens])
+  def consume_float(")" <> _data = buffer, token, tokens), do: tokenize(buffer, [finalize_float(token) | tokens])
   def consume_float("", token, tokens), do: tokenize("", [finalize_float(token) | tokens])
   def finalize_float(token) do
     {num, ""} = Float.parse(token)
@@ -47,7 +51,7 @@ defmodule DreaeQL do
     consume_identifier(data, token <> <<t::unsigned-8>>, tokens)
   end
   def consume_identifier(" " <> data, token, tokens), do: tokenize(data, [finalize_identifier(token) | tokens])
-  def consume_identifier(")" <> data, token, tokens), do: tokenize(")" <> data, [finalize_identifier(token) | tokens])
+  def consume_identifier(")" <> _data = buffer, token, tokens), do: tokenize(buffer, [finalize_identifier(token) | tokens])
   def consume_identifier("", token, tokens), do: tokenize("", [finalize_identifier(token) | tokens])
 
   def consume_string("", buffer, tokens), do: tokenize("", [[:literal, :string, buffer] | tokens])
@@ -65,12 +69,14 @@ defmodule DreaeQL do
     parse_query(tokens)
   end
 
+  use DreaeQL.Operators
+  use DreaeQL.Terms
+
   def parse_term([[:identifier, _ident] = ident | tokens]), do: {parse_term_ident(ident), tokens}
   def parse_term([[:literal, _t, _d] = literal | tokens]), do: {parse_term_literal(literal), tokens}
   def parse_term([:open_paren | tokens]) do
-    {sub_expr, [:close_paren | tokens]} = Enum.split_while(tokens, &(&1 != :close_paren))
-    {expr, []} = parse_expression(sub_expr)
-    {expr, tokens}
+    {term, [:close_paren | tokens]} = parse_expression(tokens, 0)
+    {term, tokens}
   end
 
   def parse_term_literal([:literal, :int, num]), do: %Terms.LiteralInt{value: num}
@@ -81,40 +87,46 @@ defmodule DreaeQL do
 
   def parse_term_ident([:identifier, ident]), do: %Terms.Identifier{ident: ident}
 
-  def parse_expression(tokens) do
-    {term, tokens} = parse_term(tokens)
-    parse_expression(term, tokens)
+  # This is effectively a Pratt parser
+  def parse_expression(tokens, min_bp) do
+    {lhs, tokens} = parse_term(tokens)
+    parse_expression(lhs, tokens, min_bp)
   end
 
-  def parse_expression(left_side, [:and | tokens]) do
-    {right_side, tokens} = parse_expression(tokens)
-    {%Expressions.And{left_side: left_side, right_side: right_side}, tokens}
+  def parse_expression(lhs, [op | tokens] = token_stream, min_bp) do
+    case operator_precedence(op) do
+      {l_bp, r_bp} ->
+        if l_bp < min_bp do
+          {lhs, token_stream}
+        else
+          {rhs, tokens} = parse_expression(tokens, r_bp)
+          parse_expression(finalize_operator(op, lhs, rhs), tokens, min_bp)
+        end
+      _ -> {lhs, token_stream}
+    end
   end
+  def parse_expression(lhs, [], _), do: {lhs, []}
 
-  def parse_expression(left_side, [:or | tokens]) do
-    {right_side, tokens} = parse_expression(tokens)
-    {%Expressions.Or{left_side: left_side, right_side: right_side}, tokens}
-  end
+  def operator_precedence(:and), do: {2, 1}
+  def operator_precedence(:or), do: {2, 1}
+  def operator_precedence(:equals), do: {8, 7}
+  def operator_precedence(:not_equals), do: {8, 7}
+  def operator_precedence(:lt), do: {8, 7}
+  def operator_precedence(:gt), do: {8, 7}
+  def operator_precedence(:le), do: {8, 7}
+  def operator_precedence(:ge), do: {8, 7}
+  def operator_precedence(_), do: nil
 
-  def parse_expression(left_side, [:equals | tokens]) do
-    {right_side, tokens} = parse_term(tokens)
-    parse_expression(%Expressions.Equals{left_side: left_side, right_side: right_side}, tokens)
-  end
-
-  def parse_expression(left_side, [:bang, :equals | tokens]) do
-    {right_side, tokens} = parse_term(tokens)
-    parse_expression(%Expressions.NotEquals{left_side: left_side, right_side: right_side}, tokens)
-  end
-
-  def parse_expression(%Terms.Identifier{} = ident, tokens), do: {ident, tokens}
-  def parse_expression(%Terms.LiteralInt{} = ident, tokens), do: {ident, tokens}
-  def parse_expression(%Terms.LiteralFloat{} = ident, tokens), do: {ident, tokens}
-  def parse_expression(%Terms.LiteralString{} = ident, tokens), do: {ident, tokens}
-  def parse_expression(%Terms.LiteralBool{} = ident, tokens), do: {ident, tokens}
-  def parse_expression(expr, []), do: {expr, []}
-
+  def finalize_operator(:equals, lhs, rhs), do: %Operators.Equals{left_side: lhs, right_side: rhs}
+  def finalize_operator(:not_equals, lhs, rhs), do: %Operators.NotEquals{left_side: lhs, right_side: rhs}
+  def finalize_operator(:gt, lhs, rhs), do: %Operators.GreaterThan{left_side: lhs, right_side: rhs}
+  def finalize_operator(:ge, lhs, rhs), do: %Operators.GreaterThanEquals{left_side: lhs, right_side: rhs}
+  def finalize_operator(:lt, lhs, rhs), do: %Operators.LessThan{left_side: lhs, right_side: rhs}
+  def finalize_operator(:le, lhs, rhs), do: %Operators.LessThanEquals{left_side: lhs, right_side: rhs}
+  def finalize_operator(:and, lhs, rhs), do: %Operators.And{left_side: lhs, right_side: rhs}
+  def finalize_operator(:or, lhs, rhs), do: %Operators.Or{left_side: lhs, right_side: rhs}
 
   def parse_query(tokens) do
-    parse_expression(tokens)
+    parse_expression(tokens, 0)
   end
 end
