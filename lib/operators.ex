@@ -7,6 +7,14 @@ defmodule DreaeQL.Operators do
     end
   end
 
+  defmacro unary_operator(name) do
+    quote do
+      defmodule DreaeQL.Operators.unquote(name) do
+        defstruct [:expr, operator: :unary]
+      end
+    end
+  end
+
   defmacro __using__(_params) do
     quote do
       alias DreaeQL.Operators
@@ -18,6 +26,7 @@ defmodule DreaeQL.Operators do
       Operators.binary_operator LessThan
       Operators.binary_operator GreaterThanEquals
       Operators.binary_operator LessThanEquals
+      Operators.unary_operator Not
     end
   end
 end

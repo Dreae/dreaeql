@@ -10,7 +10,9 @@ defmodule DreaeQL do
   and any unused tokens, if any.
 
   ## Examples
-    iex(1)> DreaeQL.parse("foo = 123 and bar = \\"456\\"")
+
+    ```
+    iex> DreaeQL.parse("foo = 123 and bar = \\"456\\"")
     {%DreaeQL.Operators.And{
       left_side: %DreaeQL.Operators.Equals{
         left_side: %DreaeQL.Terms.Identifier{ident: "foo", term: :ident},
@@ -24,6 +26,8 @@ defmodule DreaeQL do
         right_side: %DreaeQL.Terms.LiteralString{term: :string, value: "456"}
       }
     }, []}
+    ```
+
   """
   @spec parse(String.t) :: {ast, list()}
   def parse(string), do: parse_tokens(tokenize(string))
@@ -76,6 +80,7 @@ defmodule DreaeQL do
 
   defp finalize_identifier("and"), do: :and
   defp finalize_identifier("or"), do: :or
+  defp finalize_identifier("not"), do: :not
   defp finalize_identifier("true"), do: [:literal, :bool, :true]
   defp finalize_identifier("false"), do: [:literal, :bool, :false]
   defp finalize_identifier(token), do: [:identifier, token]
@@ -103,8 +108,14 @@ defmodule DreaeQL do
   defp parse_term_ident([:identifier, ident]), do: %Terms.Identifier{ident: ident}
 
   # This is effectively a Pratt parser
-  defp parse_expression(tokens, min_bp) do
-    {lhs, tokens} = parse_term(tokens)
+  defp parse_expression([op | tokens] = token_stream, min_bp) do
+    {lhs, tokens} = case operator_precedence(op) do
+      {0, r_bp} ->
+        {rhs, tokens} = parse_expression(tokens, r_bp)
+        {finalize_operator(op, rhs), tokens}
+      _ -> parse_term(token_stream)
+    end
+
     parse_expression(lhs, tokens, min_bp)
   end
 
@@ -124,12 +135,13 @@ defmodule DreaeQL do
 
   defp operator_precedence(:and), do: {1, 2}
   defp operator_precedence(:or), do: {1, 2}
-  defp operator_precedence(:equals), do: {8, 7}
-  defp operator_precedence(:not_equals), do: {8, 7}
-  defp operator_precedence(:lt), do: {8, 7}
-  defp operator_precedence(:gt), do: {8, 7}
-  defp operator_precedence(:le), do: {8, 7}
-  defp operator_precedence(:ge), do: {8, 7}
+  defp operator_precedence(:equals), do: {4, 3}
+  defp operator_precedence(:not_equals), do: {4, 3}
+  defp operator_precedence(:lt), do: {4, 3}
+  defp operator_precedence(:gt), do: {4, 3}
+  defp operator_precedence(:le), do: {4, 3}
+  defp operator_precedence(:ge), do: {4, 3}
+  defp operator_precedence(:not), do: {0, 3}
   defp operator_precedence(_), do: nil
 
   defp finalize_operator(:equals, lhs, rhs), do: %Operators.Equals{left_side: lhs, right_side: rhs}
@@ -140,6 +152,7 @@ defmodule DreaeQL do
   defp finalize_operator(:le, lhs, rhs), do: %Operators.LessThanEquals{left_side: lhs, right_side: rhs}
   defp finalize_operator(:and, lhs, rhs), do: %Operators.And{left_side: lhs, right_side: rhs}
   defp finalize_operator(:or, lhs, rhs), do: %Operators.Or{left_side: lhs, right_side: rhs}
+  defp finalize_operator(:not, rhs), do: %Operators.Not{expr: rhs}
 
   defp parse_query(tokens) do
     parse_expression(tokens, 0)
