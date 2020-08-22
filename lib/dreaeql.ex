@@ -29,9 +29,7 @@ defmodule DreaeQL do
   def consume_number(<<t::unsigned-8>> <> data, token, tokens) when t >= ?0 and t <= ?9, do: consume_number(data, token <> <<t::unsigned-8>>, tokens)
   def consume_number("_" <> data, token, tokens), do: consume_number(data, token, tokens)
   def consume_number("." <> data, token, tokens), do: consume_float(data, token <> ".", tokens)
-  def consume_number(" " <> data, token, tokens), do: tokenize(data, [finalize_number(token) | tokens])
-  def consume_number(")" <> _data = buffer, token, tokens), do: tokenize(buffer, [finalize_number(token) | tokens])
-  def consume_number("", token, tokens), do: tokenize("", [finalize_number(token) | tokens])
+  def consume_number(data, token, tokens), do: tokenize(data, [finalize_number(token) | tokens])
   def finalize_number(token) do
     {num, ""} = Integer.parse(token)
     [:literal, :int, num]
@@ -39,9 +37,7 @@ defmodule DreaeQL do
 
   def consume_float(<<t::unsigned-8>> <> data, token, tokens) when t >= ?0 and t <= ?9, do: consume_float(data, token <> <<t::unsigned-8>>, tokens)
   def consume_float("_" <> data, token, tokens), do: consume_float(data, token, tokens)
-  def consume_float(" " <> data, token, tokens), do: tokenize(data, [finalize_float(token) | tokens])
-  def consume_float(")" <> _data = buffer, token, tokens), do: tokenize(buffer, [finalize_float(token) | tokens])
-  def consume_float("", token, tokens), do: tokenize("", [finalize_float(token) | tokens])
+  def consume_float(data, token, tokens), do: tokenize(data, [finalize_float(token) | tokens])
   def finalize_float(token) do
     {num, ""} = Float.parse(token)
     [:literal, :float, num]
@@ -50,9 +46,7 @@ defmodule DreaeQL do
   def consume_identifier(<<t::unsigned-8>> <> data, token, tokens) when (t >= ?A and t <= ?Z) or (t >= ?a and t <= ?z) do
     consume_identifier(data, token <> <<t::unsigned-8>>, tokens)
   end
-  def consume_identifier(" " <> data, token, tokens), do: tokenize(data, [finalize_identifier(token) | tokens])
-  def consume_identifier(")" <> _data = buffer, token, tokens), do: tokenize(buffer, [finalize_identifier(token) | tokens])
-  def consume_identifier("", token, tokens), do: tokenize("", [finalize_identifier(token) | tokens])
+  def consume_identifier(data, token, tokens), do: tokenize(data, [finalize_identifier(token) | tokens])
 
   def consume_string("", buffer, tokens), do: tokenize("", [[:literal, :string, buffer] | tokens])
   def consume_string("\"" <> data, buffer, tokens), do: tokenize(data, [[:literal, :string, buffer] | tokens])
@@ -107,8 +101,8 @@ defmodule DreaeQL do
   end
   def parse_expression(lhs, [], _), do: {lhs, []}
 
-  def operator_precedence(:and), do: {2, 1}
-  def operator_precedence(:or), do: {2, 1}
+  def operator_precedence(:and), do: {1, 2}
+  def operator_precedence(:or), do: {1, 2}
   def operator_precedence(:equals), do: {8, 7}
   def operator_precedence(:not_equals), do: {8, 7}
   def operator_precedence(:lt), do: {8, 7}
