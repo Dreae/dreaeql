@@ -2,6 +2,7 @@ defmodule DreaeQL.Terms do
   defmacro term(name, type, params) do
     quote do
       defmodule DreaeQL.Terms.unquote(name) do
+        @type t :: %DreaeQL.Terms.unquote(name){term: unquote(type)}
         defstruct [term: unquote(type)] ++ unquote(params)
       end
     end
@@ -21,6 +22,13 @@ defmodule DreaeQL.Terms do
       Terms.literal LiteralBool, :bool
       Terms.literal LiteralString, :string
       Terms.term Identifier, :ident, [:ident]
+
+      @type dreaeql_term ::
+        Terms.Identifier.t
+        | Terms.LiteralBool.t
+        | Terms.LiteralInt.t
+        | Terms.LiteralFloat.t
+        | Terms.LiteralString.t
     end
   end
 end

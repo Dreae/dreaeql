@@ -3,8 +3,6 @@ defmodule DreaeQL do
   A library for parsing a simple query language into an abstract syntax tree.
   """
 
-  @type ast :: term()
-
   @doc """
   Parses a string into a DreaeQL AST. Returns a tuple containing the AST
   and any unused tokens, if any.
@@ -29,7 +27,7 @@ defmodule DreaeQL do
     ```
 
   """
-  @spec parse(String.t) :: {ast, list()}
+  @spec parse(String.t) :: {expression(), list}
   def parse(string), do: parse_tokens(tokenize(string))
 
   @doc false
@@ -89,8 +87,9 @@ defmodule DreaeQL do
     parse_query(tokens)
   end
 
-  use DreaeQL.Operators
+  @type expression :: DreaeQL.dreaeql_operator | DreaeQL.dreaeql_term
   use DreaeQL.Terms
+  use DreaeQL.Operators
 
   defp parse_term([[:identifier, _ident] = ident | tokens]), do: {parse_term_ident(ident), tokens}
   defp parse_term([[:literal, _t, _d] = literal | tokens]), do: {parse_term_literal(literal), tokens}
