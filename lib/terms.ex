@@ -15,11 +15,12 @@ defmodule DreaeQL.Terms do
 
   defmacro __using__(_params) do
     quote do
-      DreaeQL.Terms.literal LiteralInt, :int
-      DreaeQL.Terms.literal LiteralFloat, :float
-      DreaeQL.Terms.literal LiteralBool, :bool
-      DreaeQL.Terms.literal LiteralString, :string
-      DreaeQL.Terms.term Identifier, :ident, [:ident]
+      alias DreaeQL.Terms
+      Terms.literal LiteralInt, :int
+      Terms.literal LiteralFloat, :float
+      Terms.literal LiteralBool, :bool
+      Terms.literal LiteralString, :string
+      Terms.term Identifier, :ident, [:ident]
     end
   end
 end

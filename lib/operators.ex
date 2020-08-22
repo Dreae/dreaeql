@@ -9,14 +9,15 @@ defmodule DreaeQL.Operators do
 
   defmacro __using__(_params) do
     quote do
-      DreaeQL.Operators.binary_operator And
-      DreaeQL.Operators.binary_operator Or
-      DreaeQL.Operators.binary_operator NotEquals
-      DreaeQL.Operators.binary_operator Equals
-      DreaeQL.Operators.binary_operator GreaterThan
-      DreaeQL.Operators.binary_operator LessThan
-      DreaeQL.Operators.binary_operator GreaterThanEquals
-      DreaeQL.Operators.binary_operator LessThanEquals
+      alias DreaeQL.Operators
+      Operators.binary_operator And
+      Operators.binary_operator Or
+      Operators.binary_operator NotEquals
+      Operators.binary_operator Equals
+      Operators.binary_operator GreaterThan
+      Operators.binary_operator LessThan
+      Operators.binary_operator GreaterThanEquals
+      Operators.binary_operator LessThanEquals
     end
   end
 end

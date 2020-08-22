@@ -1,6 +1,8 @@
 # Dreaeql
 
-**TODO: Add description**
+A library for parsing a simple query language into an
+abstract syntax tree. Originally designed for use by 
+[loggregate](https://github.com/GFLClan/loggregate)
 
 ## Installation
 
