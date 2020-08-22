@@ -67,7 +67,11 @@ defmodule DreaeQL do
     [:literal, :float, num]
   end
 
-  defp consume_identifier(<<t::unsigned-8>> <> data, token, tokens) when (t >= ?A and t <= ?Z) or (t >= ?a and t <= ?z) do
+  defp consume_identifier(<<t::unsigned-8>> <> data, token, tokens)
+    when (t >= ?A and t <= ?Z)
+      or (t >= ?a and t <= ?z)
+      or (t == ?. or t == ?_)
+      do
     consume_identifier(data, token <> <<t::unsigned-8>>, tokens)
   end
   defp consume_identifier(data, token, tokens), do: tokenize(data, [finalize_identifier(token) | tokens])
